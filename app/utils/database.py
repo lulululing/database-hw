@@ -2,7 +2,7 @@
 import pymysql
 import pandas as pd
 import streamlit as st
-from config import DB_CONFIG, DB_BASE_CONFIG, DB_ROLE_USERS, USE_DB_ROLES
+from config import DB_CONFIG, DB_BASE_CONFIG, DB_ROLE_USERS, USE_DB_ROLES, ROLES
 from utils.sql_queries import *
 
 class DatabaseManager:
@@ -29,7 +29,6 @@ class DatabaseManager:
         try:
             return pd.read_sql(query, self.connection, params=params)
         except Exception as e:
-            # 这里的报错可能会因为权限问题触发，属于正常现象
             print(f"查询错误: {e}")
             return pd.DataFrame()
 
@@ -56,7 +55,7 @@ class DatabaseManager:
 
     def get_all_countries(self):
         """获取所有国家"""
-        df = self.execute_query("SELECT DISTINCT Country FROM History ORDER BY Country")
+        df = self.execute_query("SELECT DISTINCT Country FROM Country ORDER BY Country")
         return df['Country'].tolist() if not df.empty else []
 
     def get_all_time_periods(self):
@@ -64,11 +63,66 @@ class DatabaseManager:
         df = self.execute_query("SELECT DISTINCT h_Time FROM History ORDER BY h_Time DESC")
         return df['h_Time'].tolist() if not df.empty else []
 
-    def log_event(self, user, action, details):
-        """系统日志记录"""
-        self.execute_update(Q_LOG_ACTION, (user, self.role, action, details))
+    def log_event(self, username, action, details):
+        """
+        改进的系统日志记录
+        自动从session_state获取角色信息
+        """
+        # 从session_state获取角色
+        role = st.session_state.get('role', 'Unknown')
+        
+        # 获取角色的中文标签
+        role_label = ROLES.get(role, {}).get('label', role)
+        
+        self.execute_update(Q_LOG_ACTION, (username, role_label, action, details))
 
-    # ================= 新增：页面数据查询方法 =================
+    # ================= 新增：删除功能 =================
+    def delete_history_data(self, h_time, country, model):
+        """删除历史数据（History表）"""
+        try:
+            query = "DELETE FROM History WHERE h_Time = %s AND Country = %s AND Model = %s"
+            return self.execute_update(query, (h_time, country, model))
+        except Exception as e:
+            st.error(f"删除历史数据失败: {e}")
+            return False
+
+    def delete_budget_data(self, h_time, country, model):
+        """删除预算数据（Budget表）"""
+        try:
+            query = "DELETE FROM Budget WHERE h_Time = %s AND Country = %s AND Model = %s"
+            return self.execute_update(query, (h_time, country, model))
+        except Exception as e:
+            st.error(f"删除预算数据失败: {e}")
+            return False
+
+    def delete_sales_price(self, record_id):
+        """删除销售价格记录（Sales_Price表）"""
+        try:
+            query = "DELETE FROM Sales_Price WHERE id = %s"
+            return self.execute_update(query, (record_id,))
+        except Exception as e:
+            st.error(f"删除销售价格失败: {e}")
+            return False
+
+    def delete_costs_data(self, costs_id):
+        """删除成本数据（Costs表）"""
+        try:
+            query = "DELETE FROM Costs WHERE Costs_id = %s"
+            return self.execute_update(query, (costs_id,))
+        except Exception as e:
+            st.error(f"删除成本数据失败: {e}")
+            return False
+
+    def delete_regional_expenses(self, country, expenses_time):
+        """删除区域费用（Regional_Expenses表）"""
+        try:
+            query = "DELETE FROM Regional_Expenses WHERE Country = %s AND Expenses_time = %s"
+            return self.execute_update(query, (country, expenses_time))
+        except Exception as e:
+            st.error(f"删除区域费用失败: {e}")
+            return False
+
+    # ================= 页面数据查询方法 =================
     def get_history_data(self, filters=None):
         """获取历史数据"""
         query = "SELECT * FROM History WHERE 1=1"
@@ -107,34 +161,53 @@ class DatabaseManager:
         query += " ORDER BY h_Time DESC, Country, Model"
         return self.execute_query(query, tuple(params) if params else None)
 
-    def get_costs_data(self):
-        """获取成本数据"""
+    def get_costs_data(self, country=None):
+        """获取成本数据（支持按国家筛选）"""
+        if country:
+            return self.execute_query(
+                "SELECT * FROM Costs WHERE Country = %s ORDER BY Costs_time DESC, Model",
+                (country,)
+            )
         return self.execute_query("SELECT * FROM Costs ORDER BY Costs_time DESC, Country, Model")
 
+    def get_sales_price_data(self, country=None):
+        """获取销售价格数据（支持按国家筛选）"""
+        if country:
+            return self.execute_query(
+                "SELECT * FROM Sales_Price WHERE Country = %s ORDER BY h_Time DESC, Model",
+                (country,)
+            )
+        return self.execute_query("SELECT * FROM Sales_Price ORDER BY h_Time DESC, Country, Model")
+
     def get_comparison_data(self, time_period=None):
-        """获取预算实际对比数据"""
+        """
+        改进：获取预算vs预测对比数据（而不是预算vs历史）
+        使用Display表作为预测数据，Budget表作为预算数据
+        """
         if time_period:
             return self.execute_query("""
-                SELECT h.h_Time, h.Country, h.Model, 
-                       h.Sales as 实际销量, b.Sales as 预算销量,
-                       h.Revenues as 实际收入, b.Revenues as 预算收入,
-                       h.Gross_profits as 实际毛利, b.Gross_profits as 预算毛利
-                FROM History h 
-                LEFT JOIN Budget b ON h.h_Time = b.h_Time AND h.Country = b.Country AND h.Model = b.Model
-                WHERE h.h_Time = %s
+                SELECT d.h_Time, d.Country, d.Model, 
+                       d.Sales as 预测销量, b.Sales as 预算销量,
+                       d.Revenues as 预测收入, b.Revenues as 预算收入,
+                       d.Gross_profits as 预测毛利, b.Gross_profits as 预算毛利,
+                       d.Net_income as 预测净利, b.Net_income as 预算净利
+                FROM Display d
+                LEFT JOIN Budget b ON d.h_Time = b.h_Time AND d.Country = b.Country AND d.Model = b.Model
+                WHERE d.h_Time = %s
             """, (time_period,))
         else:
             return self.execute_query("""
-                SELECT h.h_Time, h.Country, h.Model, 
-                       h.Sales as 实际销量, b.Sales as 预算销量,
-                       h.Revenues as 实际收入, b.Revenues as 预算收入,
-                       h.Gross_profits as 实际毛利, b.Gross_profits as 预算毛利
-                FROM History h 
-                LEFT JOIN Budget b ON h.h_Time = b.h_Time AND h.Country = b.Country AND h.Model = b.Model
+                SELECT d.h_Time, d.Country, d.Model, 
+                       d.Sales as 预测销量, b.Sales as 预算销量,
+                       d.Revenues as 预测收入, b.Revenues as 预算收入,
+                       d.Gross_profits as 预测毛利, b.Gross_profits as 预算毛利,
+                       d.Net_income as 预测净利, b.Net_income as 预算净利
+                FROM Display d
+                LEFT JOIN Budget b ON d.h_Time = b.h_Time AND d.Country = b.Country AND d.Model = b.Model
             """)
 
     def get_country_summary(self, time_period=None):
-        """获取国家汇总数据"""
+        """获取国家汇总数据（改用Display作为预测数据）"""
         if time_period:
             return self.execute_query("""
                 SELECT Country, 
@@ -142,7 +215,7 @@ class DatabaseManager:
                        SUM(Revenues) as 总收入,
                        SUM(Gross_profits) as 总毛利,
                        SUM(Net_income) as 总净收入
-                FROM History 
+                FROM Display
                 WHERE h_Time = %s
                 GROUP BY Country
                 ORDER BY 总收入 DESC
@@ -154,13 +227,13 @@ class DatabaseManager:
                        SUM(Revenues) as 总收入,
                        SUM(Gross_profits) as 总毛利,
                        SUM(Net_income) as 总净收入
-                FROM History 
+                FROM Display
                 GROUP BY Country
                 ORDER BY 总收入 DESC
             """)
 
     def get_model_summary(self, time_period=None):
-        """获取产品汇总数据"""
+        """获取产品汇总数据（改用Display）"""
         if time_period:
             return self.execute_query("""
                 SELECT Model, 
@@ -168,7 +241,7 @@ class DatabaseManager:
                        SUM(Revenues) as 总收入,
                        SUM(Gross_profits) as 总毛利,
                        SUM(Net_income) as 总净收入
-                FROM History 
+                FROM Display
                 WHERE h_Time = %s
                 GROUP BY Model
                 ORDER BY 总收入 DESC
@@ -180,7 +253,7 @@ class DatabaseManager:
                        SUM(Revenues) as 总收入,
                        SUM(Gross_profits) as 总毛利,
                        SUM(Net_income) as 总净收入
-                FROM History 
+                FROM Display
                 GROUP BY Model
                 ORDER BY 总收入 DESC
             """)
@@ -207,6 +280,10 @@ class DatabaseManager:
                 m_info = df_model[df_model['Model'] == model]
                 series = m_info.iloc[0]['Series'] if not m_info.empty else ''
                 label = m_info.iloc[0]['Model_label'] if not m_info.empty else ''
+                
+                # 获取市场
+                country_info = self.execute_query("SELECT Market FROM Country WHERE Country = %s", (country,))
+                market = country_info.iloc[0]['Market'] if not country_info.empty else ''
 
                 # 1. 获取汇率 (Exchange)
                 ex_rate = 1.0
@@ -261,13 +338,14 @@ class DatabaseManager:
                 
                 margin_profits = gross_profits - rand_d_exp - after_sales_prov - mkt_prov - reg_mkt - reg_labor - reg_var
                 
-                # 其它费用
+                # 其他费用
                 func_exp = total_costs * func_rate
                 hq_exp = total_costs * hq_rate
                 
                 net_income = margin_profits - reg_fixed - func_exp - hq_exp
 
                 # 填充结果
+                row['Market'] = market
                 row['Revenues'] = round(revenues, 2)
                 row['Gross_profits'] = round(gross_profits, 2)
                 row['Margin_profits'] = round(margin_profits, 2)
@@ -328,8 +406,35 @@ class DatabaseManager:
             return False
 
     def get_system_logs(self):
-            """获取系统操作日志"""
+        """获取系统操作日志"""
+        try:
+            # 先检查表是否存在
+            check_table = "SHOW TABLES LIKE 'System_Log'"
+            result = self.execute_query(check_table)
+            
+            if result.empty:
+                print("System_Log表不存在，尝试创建...")
+                # 尝试创建表
+                create_table = """
+                    CREATE TABLE IF NOT EXISTS System_Log (
+                        Log_ID INT AUTO_INCREMENT PRIMARY KEY,
+                        Log_Time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        Username VARCHAR(100) NOT NULL,
+                        Role VARCHAR(100),
+                        Action_Type VARCHAR(100),
+                        Details TEXT,
+                        INDEX idx_username (Username),
+                        INDEX idx_time (Log_Time),
+                        INDEX idx_action (Action_Type)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+                self.execute_update(create_table)
+            
+            # 查询日志
             return self.execute_query(Q_GET_SYSTEM_LOGS)
+        except Exception as e:
+            print(f"获取系统日志失败: {e}")
+            return pd.DataFrame()
 
 @st.cache_resource
 def get_db_manager(_role=None):
