@@ -22,7 +22,7 @@ if logo_path.exists():
 else:
     st.set_page_config(
         page_title="经营预测数据库系统",
-        page_icon="📊",
+    page_icon="",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -122,7 +122,7 @@ def login_page():
     col_lang = st.columns([5, 1])[1]
     with col_lang:
         lang = st.selectbox(
-            "🌐",
+            "",
             options=["🇨🇳 中文", "🇺🇸 English"],
             index=0 if st.session_state.language == 'zh' else 1,
             label_visibility="collapsed",
@@ -153,10 +153,10 @@ def login_page():
             |---|---|---|---|
             | **经理** | `manager_user` | 张经理 | `123` |
             | **财务** | `fbp_user` | 李财务 | `123` |
-            | **印度业务** | `sales_india` | Rahul 🇮🇳 | `123` |
-            | **巴基斯坦** | `sales_pakistan` | Ahmed 🇵🇰 | `123` |
-            | **南非业务** | `sales_south_africa` | Botha 🇿🇦 | `123` |
-            | **肯尼亚** | `sales_kenya` | Kipchoge 🇰🇪 | `123` |
+            | **印度业务** | `sales_india` | Rahul | `123` |
+            | **巴基斯坦** | `sales_pakistan` | Ahmed | `123` |
+            | **南非业务** | `sales_south_africa` | Botha | `123` |
+            | **肯尼亚** | `sales_kenya` | Kipchoge | `123` |
             """
         },
         'en': {
@@ -174,10 +174,10 @@ def login_page():
             |---|---|---|---|
             | **Manager** | `manager_user` | Zhang Manager | `123` |
             | **FBP** | `fbp_user` | Li Finance | `123` |
-            | **India Sales** | `sales_india` | Rahul 🇮🇳 | `123` |
-            | **Pakistan Sales** | `sales_pakistan` | Ahmed 🇵🇰 | `123` |
-            | **South Africa Sales** | `sales_south_africa` | Botha 🇿🇦 | `123` |
-            | **Kenya Sales** | `sales_kenya` | Kipchoge 🇰🇪 | `123` |
+            | **India Sales** | `sales_india` | Rahul | `123` |
+            | **Pakistan Sales** | `sales_pakistan` | Ahmed | `123` |
+            | **South Africa Sales** | `sales_south_africa` | Botha | `123` |
+            | **Kenya Sales** | `sales_kenya` | Kipchoge | `123` |
             """
         }
     }

@@ -60,10 +60,10 @@ def main():
     # 根据权限配置可用视图
     if role == 'Manager':
         # 经理：所有Display视图 + 所有s_Display视图
-        available_views.append(("Display", "📊 Comprehensive Display (All Countries)"))
-        available_views.append(("s_Display", "📈 Summary Display (History+Forecast+Budget)"))
-        available_views.append(("s_Display_Model", "📱 Model Summary Display"))
-        available_views.append(("s_Display_Country", "🌍 Country Summary Display"))
+        available_views.append(("Display", " Comprehensive Display (All Countries)"))
+        available_views.append(("s_Display", " Summary Display (History+Forecast+Budget)"))
+        available_views.append(("s_Display_Model", " Model Summary Display"))
+        available_views.append(("s_Display_Country", " Country Summary Display"))
         
         # 经理也可以看各国的Display视图
         available_views.append(("DisplayIndia", "🇮🇳 Display - India"))
@@ -73,11 +73,11 @@ def main():
     
     elif role == 'FBP':
         # 财务：Display视图（所有国家）
-        available_views.append(("Display", "📊 Comprehensive Display (All Countries)"))
-        available_views.append(("History", "📋 Historical Data"))
-        available_views.append(("Budget", "📈 Budget Data"))
-        available_views.append(("Costs", "💰 Cost Data"))
-        available_views.append(("Sales_Price", "💵 Sales Price Data"))
+        available_views.append(("Display", " Comprehensive Display (All Countries)"))
+        available_views.append(("History", " Historical Data"))
+        available_views.append(("Budget", " Budget Data"))
+        available_views.append(("Costs", " Cost Data"))
+        available_views.append(("Sales_Price", " Sales Price Data"))
     
     elif role.startswith('Salesperson_'):
         # 业务员：只看本国的视图
@@ -85,21 +85,21 @@ def main():
         
         if country == 'India':
             available_views.append(("DisplayIndia", "🇮🇳 Display - India"))
-            available_views.append(("Sales_Price_India", "💵 Sales Price - India"))
+            available_views.append(("Sales_Price_India", " Sales Price - India"))
         elif country == 'Pakistan':
             available_views.append(("DisplayPakistan", "🇵🇰 Display - Pakistan"))
-            available_views.append(("Sales_Price_Pakistan", "💵 Sales Price - Pakistan"))
+            available_views.append(("Sales_Price_Pakistan", " Sales Price - Pakistan"))
         elif country == 'Kenya':
             available_views.append(("DisplayKenya", "🇰🇪 Display - Kenya"))
-            available_views.append(("Sales_Price_Kenya", "💵 Sales Price - Kenya"))
+            available_views.append(("Sales_Price_Kenya", " Sales Price - Kenya"))
         elif country == 'South Africa':
             available_views.append(("DisplaySouthAfrica", "🇿🇦 Display - South Africa"))
-            available_views.append(("Sales_Price_South_Africa", "💵 Sales Price - South Africa"))
+            available_views.append(("Sales_Price_South_Africa", " Sales Price - South Africa"))
         
         # 业务员也能查看本国的History, Budget, Costs
-        available_views.append(("History_Country", f"📋 Historical Data - {country}"))
-        available_views.append(("Budget_Country", f"📈 Budget Data - {country}"))
-        available_views.append(("Costs_Country", f"💰 Cost Data - {country}"))
+        available_views.append(("History_Country", f" Historical Data - {country}"))
+        available_views.append(("Budget_Country", f" Budget Data - {country}"))
+        available_views.append(("Costs_Country", f" Cost Data - {country}"))
     
     if not available_views:
         st.error("No display views available for your role")
@@ -107,13 +107,13 @@ def main():
     
     # 选择视图
     view_options = [name for _, name in available_views]
-    selected_view_name = st.selectbox("📊 Select View", view_options)
+    selected_view_name = st.selectbox(" Select View", view_options)
     
     # 获取对应的数据库视图名称
     selected_db_view = next(db_view for db_view, name in available_views if name == selected_view_name)
     
     # 筛选条件
-    st.markdown("### 🔍 Filter Options")
+    st.markdown("###  Filter Options")
     
     col1, col2 = st.columns(2)
     
@@ -121,21 +121,21 @@ def main():
         # 根据用户角色限制筛选
         if u.get('country'):
             # 业务员只能看自己国家
-            st.info(f"🌍 You can only view data for **{u['country']}**")
+            st.info(f" You can only view data for **{u['country']}**")
             selected_country = [u['country']]
             country_disabled = True
         else:
             # 经理/FBP可以选择多个国家（但只显示实际存在的4个国家）
-            selected_country = st.multiselect("🌍 Select Countries", ACTUAL_COUNTRIES, default=ACTUAL_COUNTRIES[:2])
+            selected_country = st.multiselect(" Select Countries", ACTUAL_COUNTRIES, default=ACTUAL_COUNTRIES[:2])
             country_disabled = False
     
     with col2:
         # 时间筛选
         time_periods = db.get_all_time_periods()
-        selected_time = st.selectbox("📅 Select Time Period", ["All"] + time_periods)
+        selected_time = st.selectbox(" Select Time Period", ["All"] + time_periods)
     
     # 查询按钮
-    if st.button("🔎 Query Data", type="primary", use_container_width=True):
+    if st.button(" Query Data", type="primary", use_container_width=True):
         with st.spinner("Querying data..."):
             try:
                 # 构建查询
@@ -215,25 +215,25 @@ def main():
                 df = db.execute_query(query, params if params else None)
                 
                 if not df.empty:
-                    st.success(f"✅ Found {len(df)} records")
+                    st.success(f" Found {len(df)} records")
                     
                     # 格式化货币列
                     df_formatted = format_currency_columns(df)
                     
                     # 显示数据
-                    st.markdown("### 📋 Data Preview")
+                    st.markdown("###  Data Preview")
                     st.dataframe(df_formatted, use_container_width=True, height=400)
                     
                     # 统计信息
-                    st.markdown("### 📊 Summary Statistics")
+                    st.markdown("###  Summary Statistics")
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        st.metric("📝 Total Records", len(df))
+                        st.metric(" Total Records", len(df))
                     
                     with col2:
                         if 'Sales' in df.columns:
-                            st.metric("📦 Total Sales", f"{df['Sales'].sum():,}")
+                            st.metric(" Total Sales", f"{df['Sales'].sum():,}")
                     
                     with col3:
                         revenue_col = None
@@ -243,7 +243,7 @@ def main():
                                 break
                         
                         if revenue_col:
-                            st.metric("💰 Total Revenue", f"¥{df[revenue_col].sum():,.2f}")
+                            st.metric(" Total Revenue", f"¥{df[revenue_col].sum():,.2f}")
                     
                     with col4:
                         profit_col = None
@@ -253,19 +253,19 @@ def main():
                                 break
                         
                         if profit_col:
-                            st.metric("📈 Total Net Income", f"¥{df[profit_col].sum():,.2f}")
+                            st.metric(" Total Net Income", f"¥{df[profit_col].sum():,.2f}")
                     
                     # 导出功能
                     if 'export' in permissions:
                         st.markdown("---")
-                        st.markdown("### 📥 Export Data")
+                        st.markdown("###  Export Data")
                         
                         col1, col2 = st.columns(2)
                         
                         with col1:
                             csv = df.to_csv(index=False, encoding='utf-8-sig')
                             st.download_button(
-                                label="💾 Export as CSV",
+                                label=" Export as CSV",
                                 data=csv,
                                 file_name=f"{selected_view_name.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                 mime="text/csv",
@@ -281,25 +281,25 @@ def main():
                             excel_data = output.getvalue()
                             
                             st.download_button(
-                                label="📊 Export as Excel",
+                                label=" Export as Excel",
                                 data=excel_data,
                                 file_name=f"{selected_view_name.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 use_container_width=True
                             )
                 else:
-                    st.warning("⚠️ No data found")
+                    st.warning(" No data found")
                     
             except Exception as e:
-                st.error(f"❌ Query failed: {str(e)}")
-                st.info("💡 Tip: Check if the view exists in database and you have proper permissions")
+                st.error(f" Query failed: {str(e)}")
+                st.info(" Tip: Check if the view exists in database and you have proper permissions")
                 # 显示调试信息
-                with st.expander("🔍 Debug Info"):
+                with st.expander(" Debug Info"):
                     st.code(f"Query: {query}")
                     st.code(f"Params: {params}")
                     st.code(f"Error: {str(e)}")
     else:
-        st.info("👆 Select view options and click 'Query Data' button")
+        st.info(" Select view options and click 'Query Data' button")
 
 if __name__ == "__main__":
     main()

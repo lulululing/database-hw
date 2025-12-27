@@ -61,7 +61,7 @@ def main():
 def show_comparison_analysis(db):
     """改进：预算vs预测对比分析（而不是预算vs历史）"""
     st.markdown("### Budget vs Forecast Comparison")
-    st.info("📊 Compare **Budget** (planned) vs **Forecast** (predicted) data")
+    st.info(" Compare **Budget** (planned) vs **Forecast** (predicted) data")
     
     # 选择时间期间
     time_periods = db.get_all_time_periods()
@@ -103,7 +103,7 @@ def show_comparison_analysis(db):
             with col2:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label="📥 Export Comparison Data",
+                    label=" Export Comparison Data",
                     data=csv,
                     file_name=f"Budget_Forecast_Comparison_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
@@ -114,7 +114,7 @@ def show_comparison_analysis(db):
         st.markdown("---")
         st.markdown("#### Visualization")
         
-        tab1, tab2, tab3 = st.tabs(["📈 Sales Comparison", "💰 Revenue Comparison", "📊 Profit Comparison"])
+        tab1, tab2, tab3 = st.tabs([" Sales Comparison", " Revenue Comparison", " Profit Comparison"])
         
         with tab1:
             if '预测销量' in df.columns and '预算销量' in df.columns:
@@ -169,7 +169,7 @@ def show_time_breakdown_analysis(db):
     显示各个时间段的国家汇总对比
     """
     st.markdown("### Time Period Breakdown by Country")
-    st.info("📅 View country-level metrics broken down by time period")
+    st.info(" View country-level metrics broken down by time period")
     
     # 获取所有时间段
     time_periods = db.get_all_time_periods()
@@ -222,7 +222,7 @@ def show_time_breakdown_analysis(db):
     st.markdown("---")
     st.markdown("#### Visual Comparison")
     
-    tab1, tab2, tab3 = st.tabs(["📊 Revenue Trends", "💵 Net Income Trends", "🌍 Country Heatmap"])
+    tab1, tab2, tab3 = st.tabs([" Revenue Trends", " Net Income Trends", " Country Heatmap"])
     
     with tab1:
         # 收入趋势对比
@@ -256,7 +256,7 @@ def show_time_breakdown_analysis(db):
         with col2:
             csv = df_combined.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
-                label="📥 Export Time Breakdown",
+                label=" Export Time Breakdown",
                 data=csv,
                 file_name=f"Time_Breakdown_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
@@ -328,7 +328,7 @@ def show_country_summary(db):
             with col2:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label="📥 Export Country Summary",
+                    label=" Export Country Summary",
                     data=csv,
                     file_name=f"Country_Summary_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
@@ -403,7 +403,7 @@ def show_product_summary(db):
             with col2:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label="📥 Export Product Summary",
+                    label=" Export Product Summary",
                     data=csv,
                     file_name=f"Product_Summary_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
