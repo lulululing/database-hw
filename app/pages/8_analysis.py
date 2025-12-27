@@ -61,7 +61,7 @@ def main():
 def show_comparison_analysis(db):
     """改进：预算vs预测对比分析（而不是预算vs历史）"""
     st.markdown("### Budget vs Forecast Comparison")
-    st.info(" Compare **Budget** (planned) vs **Forecast** (predicted) data")
+    st.info("📊 Compare **Budget** (planned) vs **Forecast** (predicted) data")
     
     # 选择时间期间
     time_periods = db.get_all_time_periods()
@@ -103,7 +103,7 @@ def show_comparison_analysis(db):
             with col2:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label=" Export Comparison Data",
+                    label="📥 Export Comparison Data",
                     data=csv,
                     file_name=f"Budget_Forecast_Comparison_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
@@ -114,7 +114,7 @@ def show_comparison_analysis(db):
         st.markdown("---")
         st.markdown("#### Visualization")
         
-        tab1, tab2, tab3 = st.tabs([" Sales Comparison", " Revenue Comparison", " Profit Comparison"])
+        tab1, tab2, tab3 = st.tabs(["📈 Sales Comparison", "💰 Revenue Comparison", "📊 Profit Comparison"])
         
         with tab1:
             if '预测销量' in df.columns and '预算销量' in df.columns:
@@ -169,7 +169,7 @@ def show_time_breakdown_analysis(db):
     显示各个时间段的国家汇总对比
     """
     st.markdown("### Time Period Breakdown by Country")
-    st.info(" View country-level metrics broken down by time period")
+    st.info("📅 View country-level metrics broken down by time period")
     
     # 获取所有时间段
     time_periods = db.get_all_time_periods()
@@ -222,7 +222,7 @@ def show_time_breakdown_analysis(db):
     st.markdown("---")
     st.markdown("#### Visual Comparison")
     
-    tab1, tab2, tab3 = st.tabs([" Revenue Trends", " Net Income Trends", " Country Heatmap"])
+    tab1, tab2, tab3 = st.tabs(["📊 Revenue Trends", "💵 Net Income Trends", "🌍 Country Heatmap"])
     
     with tab1:
         # 收入趋势对比
@@ -256,7 +256,7 @@ def show_time_breakdown_analysis(db):
         with col2:
             csv = df_combined.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
-                label=" Export Time Breakdown",
+                label="📥 Export Time Breakdown",
                 data=csv,
                 file_name=f"Time_Breakdown_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
@@ -266,6 +266,14 @@ def show_time_breakdown_analysis(db):
 def show_country_summary(db):
     """按国家汇总分析（使用预测数据Display）"""
     st.markdown("### Country Summary Analysis (Forecast Data)")
+    
+    # 获取用户信息
+    u = st.session_state.user_info
+    country_filter = u.get('country')
+    
+    # 根据角色显示提示
+    if country_filter:
+        st.info(f"Current Region: **{country_filter}** (Viewing only your country data)")
     
     # 选择时间期间
     time_periods = db.get_all_time_periods()
@@ -278,6 +286,10 @@ def show_country_summary(db):
     
     # 获取数据
     df = db.get_country_summary(selected_time if selected_time != "All" else None)
+    
+    # 如果是业务员，筛选本国数据
+    if country_filter and df is not None and not df.empty:
+        df = df[df['Country'] == country_filter]
     
     if df is not None and not df.empty:
         st.markdown("#### Country Summary Data")
@@ -328,7 +340,7 @@ def show_country_summary(db):
             with col2:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label=" Export Country Summary",
+                    label="📥 Export Country Summary",
                     data=csv,
                     file_name=f"Country_Summary_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
@@ -342,6 +354,14 @@ def show_product_summary(db):
     """按产品汇总分析（使用预测数据Display）"""
     st.markdown("### Product Summary Analysis (Forecast Data)")
     
+    # 获取用户信息
+    u = st.session_state.user_info
+    country_filter = u.get('country')
+    
+    # 根据角色显示提示
+    if country_filter:
+        st.info(f"Current Region: **{country_filter}** (Data filtered by your country)")
+    
     # 选择时间期间
     time_periods = db.get_all_time_periods()
     selected_time = st.selectbox(
@@ -353,6 +373,34 @@ def show_product_summary(db):
     
     # 获取数据
     df = db.get_model_summary(selected_time if selected_time != "All" else None)
+    
+    # 如果是业务员，需要从Display表筛选本国产品数据
+    if country_filter and df is not None and not df.empty:
+        # 重新查询，只统计本国的产品数据
+        if selected_time != "All":
+            df = db.execute_query("""
+                SELECT Model, 
+                       SUM(Sales) as 总销量,
+                       SUM(Revenues) as 总收入,
+                       SUM(Gross_profits) as 总毛利,
+                       SUM(Net_income) as 总净收入
+                FROM Display
+                WHERE h_Time = %s AND Country = %s
+                GROUP BY Model
+                ORDER BY 总收入 DESC
+            """, (selected_time, country_filter))
+        else:
+            df = db.execute_query("""
+                SELECT Model, 
+                       SUM(Sales) as 总销量,
+                       SUM(Revenues) as 总收入,
+                       SUM(Gross_profits) as 总毛利,
+                       SUM(Net_income) as 总净收入
+                FROM Display
+                WHERE Country = %s
+                GROUP BY Model
+                ORDER BY 总收入 DESC
+            """, (country_filter,))
     
     if df is not None and not df.empty:
         st.markdown("#### Product Summary Data")
@@ -403,7 +451,7 @@ def show_product_summary(db):
             with col2:
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label=" Export Product Summary",
+                    label="📥 Export Product Summary",
                     data=csv,
                     file_name=f"Product_Summary_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",

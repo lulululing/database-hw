@@ -1,148 +1,112 @@
-
 import streamlit as st
 import pandas as pd
 from utils.database import get_db_manager
-from config import ROLES
 
 # 检查登录状态
 if not st.session_state.get('logged_in', False):
-    st.warning("Please login first")
+    st.warning("请先登录")
     st.switch_page("app.py")
 
-# 检查权限
-has_price_permission = any(perm in st.session_state.get('permissions', []) 
-                          for perm in ['edit_price', 'view_price'])
-if not has_price_permission:
-    st.error("You don't have permission to access this page")
+# 检查权限 - 所有人都能查看价格
+view_perms = ['view_price', 'edit_price']
+has_permission = any(perm in st.session_state.get('permissions', []) for perm in view_perms)
+
+if not has_permission:
+    st.error("您没有权限访问此页面")
     st.stop()
 
 # 设置页面
 st.set_page_config(
-    page_title="销售统计",
+    page_title="销售价格",
     layout="wide"
 )
-st.title("销售统计")
+
 def main():
-    """价格体系页面"""
-    # 获取当前用户信息
+    st.title("销售价格查询")
+    
+    # 获取用户信息
     u = st.session_state.user_info
-    role = u['role']
-    country = u.get('country', None)
-    
-    # 判断是否有编辑权限
-    from config import ROLES
-    is_editable = 'edit_price' in ROLES[role]['permissions']
-    
-    # 标题
-    if is_editable:
-        if country:
-            title = f"Price Management ({country})"
-            st.info(f"**{country}** Price Management Mode (Editable)")
-        else:
-            title = "Price Management (Global)"
-            st.info("Global Price Management Mode (Editable)")
-    else:
-        title = "Price Query (Read-Only)"
-        st.info("Price Query Mode (Read-Only)")
-    
-    st.markdown(f'<div class="main-header">{title}</div>', unsafe_allow_html=True)
-    
+    role = st.session_state.role
+    permissions = st.session_state.permissions
     db = get_db_manager()
     
-    # 1. 获取数据
-    if country:
-        # 业务员只能查看/编辑自己国家的数据
-        sql = "SELECT * FROM Sales_Price WHERE Country = %s"
-        df = db.execute_query(sql, (country,))
+    # 根据角色显示提示
+    if u.get('country'):
+        st.info(f"当前区域: **{u['country']}** (您只能查看本国数据)")
+        country_filter = u['country']
     else:
-        # 经理/FBP可以查看所有数据
-        sql = "SELECT * FROM Sales_Price"
-        df = db.execute_query(sql)
+        st.info("您可以查看所有国家的销售价格数据")
+        country_filter = None
     
-    if df.empty:
-        st.warning("No price data available")
-        return
-
-    # 2. 展示/编辑逻辑
-    if is_editable:
-        st.markdown("### Price Editor")
-        st.markdown("> Edit prices directly in the table, then click Save")
-        
-        # 配置列编辑器
-        edited_df = st.data_editor(
-            df,
-            column_config={
-                "id": st.column_config.NumberColumn("ID", disabled=True),
-                "Model": st.column_config.TextColumn("Model", disabled=True),
-                "Country": st.column_config.TextColumn("Country", disabled=True),
-                "h_Time": st.column_config.TextColumn("Time Period", disabled=True),
-                "Currency": st.column_config.TextColumn("Currency", disabled=True),
-                "Price": st.column_config.NumberColumn("Price", required=True, format="%.2f"),
-                "Sales": st.column_config.NumberColumn("Sales Forecast", required=True)
-            },
-            num_rows="dynamic",
-            key="price_editor"
-        )
-        
-        col1, col2 = st.columns([3, 1])
-        with col2:
-            if st.button("Save Changes", type="primary", use_container_width=True):
-                if db.save_sales_price(edited_df):
-                    st.success("Price table updated successfully")
-                    db.log_event(u['id'], "UPDATE_PRICE", f"Updated price table for {country or 'global'}")
-                    st.rerun()
-                else:
-                    st.error("Save failed")
+    # 查询数据
+    if country_filter:
+        df = db.get_sales_price_data(country=country_filter)
     else:
-        # 只读模式
-        st.markdown("### Price Query")
+        df = db.get_sales_price_data()
+    
+    if not df.empty:
+        st.success(f"找到 {len(df)} 条记录")
         
-        # 添加筛选选项
-        col1, col2, col3 = st.columns(3)
+        # 筛选功能
+        with st.expander("高级筛选"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if not country_filter:
+                    countries = ["全部"] + df['Country'].unique().tolist()
+                    selected_country = st.selectbox("国家", countries)
+                    if selected_country != "全部":
+                        df = df[df['Country'] == selected_country]
+            
+            with col2:
+                models = ["全部"] + df['Model'].unique().tolist()
+                selected_model = st.selectbox("产品型号", models)
+                if selected_model != "全部":
+                    df = df[df['Model'] == selected_model]
+            
+            with col3:
+                if 'h_Time' in df.columns:
+                    times = ["全部"] + sorted(df['h_Time'].unique().tolist(), reverse=True)
+                    selected_time = st.selectbox("时间周期", times)
+                    if selected_time != "全部":
+                        df = df[df['h_Time'] == selected_time]
+        
+        # 显示数据
+        st.markdown("### 数据预览")
+        st.dataframe(df, use_container_width=True, height=400)
+        
+        # 统计信息
+        st.markdown("### 统计摘要")
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            unique_models = df['Model'].unique().tolist()
-            selected_models = st.multiselect("Filter by Model", unique_models, default=unique_models[:3])
+            st.metric("记录数", len(df))
         
         with col2:
-            unique_times = df['h_Time'].unique().tolist()
-            selected_time = st.selectbox("Filter by Time", ["All"] + unique_times)
+            if 'Sales' in df.columns:
+                st.metric("总销量", f"{df['Sales'].sum():,}")
         
         with col3:
-            if not country:
-                unique_countries = df['Country'].unique().tolist()
-                selected_countries = st.multiselect("Filter by Country", unique_countries, default=unique_countries[:3])
-            else:
-                selected_countries = [country]
-                st.text_input("Country", country, disabled=True)
+            if 'Price' in df.columns:
+                st.metric("平均价格", f"¥{df['Price'].mean():,.2f}")
         
-        # 应用筛选
-        filtered_df = df.copy()
-        if selected_models:
-            filtered_df = filtered_df[filtered_df['Model'].isin(selected_models)]
-        if selected_time != "All":
-            filtered_df = filtered_df[filtered_df['h_Time'] == selected_time]
-        if not country and selected_countries:
-            filtered_df = filtered_df[filtered_df['Country'].isin(selected_countries)]
+        with col4:
+            if 'Currency' in df.columns:
+                currencies = df['Currency'].value_counts()
+                st.metric("主要币种", currencies.index[0] if len(currencies) > 0 else "N/A")
         
-        st.dataframe(
-            filtered_df,
-            use_container_width=True,
-            height=400
-        )
-        
-        # 显示统计信息
-        if not filtered_df.empty:
-            st.markdown("### Price Statistics")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Models", len(filtered_df['Model'].unique()))
-            with col2:
-                st.metric("Avg Price", f"¥{filtered_df['Price'].mean():.2f}")
-            with col3:
-                st.metric("Total Forecast", f"{filtered_df['Sales'].sum():,}")
-            with col4:
-                st.metric("Records", len(filtered_df))
+        # 导出功能（如果有权限）
+        if 'export' in permissions:
+            st.markdown("---")
+            csv = df.to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="导出为CSV",
+                data=csv,
+                file_name=f"sales_price_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+    else:
+        st.warning("未找到销售价格数据")
 
 if __name__ == "__main__":
     main()

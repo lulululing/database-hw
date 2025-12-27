@@ -53,8 +53,8 @@ def main():
     # 销售人员的录入选项
     if 'data_entry_sales' in permissions:
         entry_options.append(" 销售数据 (Sales & Price)")
-    if 'data_entry_currency' in permissions:
-        entry_options.append(" 币种设置 (Currency)")
+    # if 'data_entry_currency' in permissions:
+    #     entry_options.append(" 币种设置 (Currency)")
     
     # 通用数据录入（兼容旧版）
     if 'data_entry' in permissions and not entry_options:
@@ -82,8 +82,8 @@ def main():
         show_country_entry(db, u)
     elif "销售数据" in selected_entry:
         show_sales_entry(db, u)
-    elif "币种设置" in selected_entry:
-        show_currency_entry(db, u)
+    # elif "币种设置" in selected_entry:
+    #     show_currency_entry(db, u)
     elif "历史数据" in selected_entry:
         show_history_entry(db, u)
     elif "预算数据" in selected_entry:
@@ -114,6 +114,7 @@ def show_costs_entry(db, u):
             
             if submitted:
                 try:
+                    # 不指定Costs_id，让数据库自动生成
                     query = """
                         INSERT INTO Costs (Model, Country, Costs_time, Costs)
                         VALUES (%s, %s, %s, %s)
@@ -123,7 +124,7 @@ def show_costs_entry(db, u):
                         db.log_event(u['id'], "COSTS_ENTRY", f"Added/Updated costs for {model} in {country}")
                         st.success(" 成本数据保存成功！")
                     else:
-                        st.error("❌ 保存失败")
+                        st.error(" 保存失败")
                 except Exception as e:
                     st.error(f" 错误: {e}")
     
@@ -188,7 +189,7 @@ def show_expenses_entry(db, u):
     st.markdown("###  区域费用数据录入")
     st.caption("包括：营销费用、人工成本、其他变动费用、其他固定费用")
     
-    tab1, tab2 = st.tabs(["➕ 新增/修改", " 删除"])
+    tab1, tab2 = st.tabs([" 新增/修改", " 删除"])
     
     with tab1:
         with st.form("expenses_form"):
@@ -262,7 +263,7 @@ def show_expenses_entry(db, u):
 
 def show_model_entry(db, u):
     """财务：机型数据录入"""
-    st.markdown("### 机型数据录入")
+    st.markdown("###  机型数据录入")
     
     with st.form("model_form"):
         col1, col2, col3 = st.columns(3)
@@ -327,7 +328,6 @@ def show_sales_entry(db, u):
     """销售：销售量和售价录入"""
     st.markdown("###  销售数据录入")
     
-    # 业务员只能录入自己国家的数据
     if u.get('country'):
         st.info(f" 当前区域: **{u['country']}** (您只能录入本国数据)")
         default_country = u['country']
@@ -336,32 +336,26 @@ def show_sales_entry(db, u):
         default_country = "India"
         country_disabled = False
     
-    tab1, tab2 = st.tabs(["新增/修改", " 删除"])
+    tab1, tab2 = st.tabs([" 新增/修改", " 删除"])
     
     with tab1:
         with st.form("sales_form"):
             col1, col2, col3 = st.columns(3)
-            
             with col1:
                 time = st.text_input("时间周期 (YYYY-MM)", "2026-01")
-            
             with col2:
                 if country_disabled:
                     country = st.text_input("国家", default_country, disabled=True)
                 else:
                     country = st.selectbox("国家", db.get_all_countries())
-            
             with col3:
                 model = st.selectbox("产品型号", db.get_all_models())
             
             col1, col2, col3 = st.columns(3)
-            
             with col1:
-                currency = st.selectbox("币种", ["CNY", "USD"])
-            
+                currency = st.selectbox("币种", ["CHY", "USD"])
             with col2:
                 sales = st.number_input("销售量", min_value=0, value=0, step=1)
-            
             with col3:
                 price = st.number_input("销售单价", min_value=0.0, value=0.0, step=0.01)
             
@@ -369,42 +363,38 @@ def show_sales_entry(db, u):
             
             if submitted:
                 try:
-                    # 生成ID（简单方式，实际应该更复杂）
-                    import hashlib
-                    id_str = f"{model}{country}{time}"
-                    record_id = int(hashlib.md5(id_str.encode()).hexdigest()[:8], 16) % 1000000
-                    
+                    # 【修改点】：彻底删除 hashlib 相关代码
+                    # 【修改点】：SQL 中删掉 id 字段，让数据库自增（仿照 Costs 逻辑）
                     query = """
-                        INSERT INTO Sales_Price (id, Model, Country, h_Time, Currency, Sales, Price, Exchange_time)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO Sales_Price (Model, Country, h_Time, Currency, Sales, Price, Exchange_time)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         ON DUPLICATE KEY UPDATE 
                             Currency = VALUES(Currency),
                             Sales = VALUES(Sales),
                             Price = VALUES(Price)
                     """
-                    if db.execute_update(query, (record_id, model, country, time, currency, sales, price, time)):
+                    # 参数列表只保留 7 个，不再传入 record_id
+                    params = (model, country, time, currency, sales, price, time)
+                    
+                    if db.execute_update(query, params):
                         db.log_event(u['id'], "SALES_ENTRY", f"Added sales for {model} in {country}")
-                        st.success(" 销售数据保存成功！")
+                        st.success("  销售数据保存成功！")
                     else:
-                        st.error(" 保存失败")
+                        st.error("  保存失败")
                 except Exception as e:
-                    st.error(f" 错误: {e}")
+                    st.error(f"  错误: {e}")
     
     with tab2:
         st.markdown("#### 删除销售数据")
-        
         df_sales = db.get_sales_price_data(u.get('country'))
         if not df_sales.empty:
             st.dataframe(df_sales, use_container_width=True, height=300)
-            
             with st.form("delete_sales_form"):
-                record_id = st.number_input("输入要删除的记录ID", min_value=1, step=1)
-                
+                record_id_to_del = st.number_input("输入要删除的记录ID", min_value=1, step=1)
                 delete_btn = st.form_submit_button(" 删除", type="secondary")
-                
                 if delete_btn:
-                    if db.delete_sales_price(record_id):
-                        db.log_event(u['id'], "SALES_DELETE", f"Deleted sales record {record_id}")
+                    if db.delete_sales_price(record_id_to_del):
+                        db.log_event(u['id'], "SALES_DELETE", f"Deleted sales record {record_id_to_del}")
                         st.success(" 删除成功！")
                         st.rerun()
                     else:
@@ -412,10 +402,8 @@ def show_sales_entry(db, u):
         else:
             st.info("暂无销售数据")
 
-def show_currency_entry(db, u):
-    """销售：币种设置（实际就是在Sales_Price中设置Currency）"""
-    st.markdown("###  币种设置")
-    st.info(" 币种设置已集成在销售数据录入中，请使用'销售数据'选项卡")
+
+
 
 def show_history_entry(db, u):
     """通用：历史数据录入（兼容旧版）"""

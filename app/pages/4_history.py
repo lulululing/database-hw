@@ -1,157 +1,127 @@
-
 import streamlit as st
 import pandas as pd
 from utils.database import get_db_manager
 
 # 检查登录状态
 if not st.session_state.get('logged_in', False):
-    st.warning("Please login first")
+    st.warning("请先登录")
     st.switch_page("app.py")
 
-# 检查权限
-if 'view_history' not in st.session_state.get('permissions', []):
-    st.error("You don't have permission to access this page")
+# 检查权限 - 扩展：业务员也能查看
+view_perms = ['view_history', 'view_history_country']
+has_permission = any(perm in st.session_state.get('permissions', []) for perm in view_perms)
+
+if not has_permission:
+    st.error("您没有权限访问此页面")
     st.stop()
 
 # 设置页面
 st.set_page_config(
-    page_title="历史记录",
+    page_title="历史数据",
     layout="wide"
 )
 
-st.title("历史记录")
 def main():
-    """历史数据查询页面"""
-    st.markdown('<div class="main-header">History Data Query</div>', unsafe_allow_html=True)
+    st.title("历史数据查询")
     
-    # 获取数据库管理器
+    # 获取用户信息
+    u = st.session_state.user_info
+    role = st.session_state.role
+    permissions = st.session_state.permissions
     db = get_db_manager()
     
-    # 筛选条件
-    st.markdown("### Query Conditions")
+    # 根据角色显示提示
+    if u.get('country'):
+        st.info(f"当前区域: **{u['country']}** (您只能查看本国数据)")
+        country_filter = u['country']
+        country_disabled = True
+    else:
+        st.info("您可以查看所有国家的历史数据")
+        country_filter = None
+        country_disabled = False
     
-    col1, col2, col3, col4 = st.columns(4)
+    # 筛选条件
+    st.markdown("### 筛选条件")
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        # 获取时间列表
         time_periods = db.get_all_time_periods()
-        selected_time = st.selectbox(
-            "Select Time Period",
-            options=["All"] + time_periods,
-            index=0
-        )
+        selected_time = st.selectbox("时间周期", ["全部"] + time_periods)
     
     with col2:
-        # 获取国家列表
-        countries = db.get_all_countries()
-        selected_country = st.selectbox(
-            "Select Country",
-            options=["All"] + countries,
-            index=0
-        )
+        if country_disabled:
+            selected_country = st.text_input("国家", country_filter, disabled=True)
+        else:
+            countries = ["全部"] + db.get_all_countries()
+            selected_country = st.selectbox("国家", countries)
     
     with col3:
-        # 获取型号列表
-        models = db.get_all_models()
-        selected_model = st.selectbox(
-            "Select Product Model",
-            options=["All"] + models,
-            index=0
-        )
+        models = ["全部"] + db.get_all_models()
+        selected_model = st.selectbox("产品型号", models)
     
-    with col4:
-        st.markdown("<br>", unsafe_allow_html=True)
-        search_btn = st.button("Search", use_container_width=True, type="primary")
-    
-    st.markdown("---")
-    
-    # 构建筛选条件
-    filters = {}
-    if selected_time != "All":
-        filters['time'] = selected_time
-    if selected_country != "All":
-        filters['country'] = selected_country
-    if selected_model != "All":
-        filters['model'] = selected_model
-    
-    # 获取数据
-    try:
-        df = db.get_history_data(filters if filters else None)
-        
-        if df is not None and not df.empty:
-            # 显示统计信息
-            st.markdown("### Data Statistics")
-            
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.metric(
-                    label="Records",
-                    value=f"{len(df):,}"
-                )
-            
-            with col2:
-                st.metric(
-                    label="Total Sales",
-                    value=f"{df['Sales'].sum():,}"
-                )
-            
-            with col3:
-                st.metric(
-                    label="Total Revenue",
-                    value=f"¥{df['Revenues'].sum():,.2f}"
-                )
-            
-            with col4:
-                st.metric(
-                    label="Total Gross Profit",
-                    value=f"¥{df['Gross_profits'].sum():,.2f}"
-                )
-            
-            with col5:
-                st.metric(
-                    label="Total Net Income",
-                    value=f"¥{df['Net_income'].sum():,.2f}"
-                )
-            
-            st.markdown("---")
-            
-            # 显示数据表格
-            st.markdown("### Detailed Data")
-            
-            # 添加数据格式化
-            df_display = df.copy()
-            df_display['Revenues'] = df_display['Revenues'].apply(lambda x: f"¥{x:,.2f}")
-            df_display['Gross_profits'] = df_display['Gross_profits'].apply(lambda x: f"¥{x:,.2f}")
-            df_display['Margin_profits'] = df_display['Margin_profits'].apply(lambda x: f"¥{x:,.2f}")
-            df_display['Net_income'] = df_display['Net_income'].apply(lambda x: f"¥{x:,.2f}")
-            
-            st.dataframe(
-                df_display,
-                use_container_width=True,
-                height=400
-            )
-            
-            # 导出功能
-            if 'export' in st.session_state.permissions:
-                st.markdown("---")
-                col1, col2, col3 = st.columns([2, 1, 2])
-                with col2:
-                    csv = df.to_csv(index=False, encoding='utf-8-sig')
-                    st.download_button(
-                        label="Export as CSV",
-                        data=csv,
-                        file_name=f"History_Data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
-        
-        else:
-            st.warning("No data found matching the criteria.")
-    
-    except Exception as e:
-        st.error(f"Query failed: {str(e)}")
-        st.info("Please check if the database connection configuration is correct.")
+    # 查询按钮
+    if st.button("查询数据", type="primary", use_container_width=True):
+        with st.spinner("查询中..."):
+            try:
+                # 构建筛选条件
+                filters = {}
+                
+                if selected_time != "全部":
+                    filters['time'] = selected_time
+                
+                if country_disabled:
+                    filters['country'] = country_filter
+                elif selected_country != "全部":
+                    filters['country'] = selected_country
+                
+                if selected_model != "全部":
+                    filters['model'] = selected_model
+                
+                # 查询数据
+                df = db.get_history_data(filters)
+                
+                if not df.empty:
+                    st.success(f"找到 {len(df)} 条记录")
+                    
+                    # 显示数据
+                    st.markdown("### 数据预览")
+                    st.dataframe(df, use_container_width=True, height=400)
+                    
+                    # 统计信息
+                    st.markdown("### 统计摘要")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("记录数", len(df))
+                    
+                    with col2:
+                        if 'Sales' in df.columns:
+                            st.metric("总销量", f"{df['Sales'].sum():,}")
+                    
+                    with col3:
+                        if 'Revenues' in df.columns:
+                            st.metric("总收入", f"¥{df['Revenues'].sum():,.2f}")
+                    
+                    with col4:
+                        if 'Net_income' in df.columns:
+                            st.metric("总净利润", f"¥{df['Net_income'].sum():,.2f}")
+                    
+                    # 导出功能（如果有权限）
+                    if 'export' in permissions:
+                        st.markdown("---")
+                        csv = df.to_csv(index=False, encoding='utf-8-sig')
+                        st.download_button(
+                            label="导出为CSV",
+                            data=csv,
+                            file_name=f"history_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                else:
+                    st.warning("未找到符合条件的数据")
+                    
+            except Exception as e:
+                st.error(f"查询失败: {str(e)}")
 
 if __name__ == "__main__":
     main()
