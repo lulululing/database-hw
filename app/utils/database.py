@@ -60,8 +60,9 @@ class DatabaseManager:
         return df['Country'].tolist() if not df.empty else []
 
     def get_all_time_periods(self):
-        """获取所有时间周期"""
-        df = self.execute_query("SELECT DISTINCT h_Time FROM History ORDER BY h_Time DESC")
+        """获取所有时间周期（改为从Display表获取）"""
+        # 将 History 改为 Display
+        df = self.execute_query("SELECT DISTINCT h_Time FROM Display ORDER BY h_Time DESC")
         return df['h_Time'].tolist() if not df.empty else []
 
     def insert_system_log(self, action_type, details, username=None, role=None):
@@ -665,4 +666,5 @@ class DatabaseManager:
 
 
 def get_db_manager(_role=None):
+
     return DatabaseManager(_role)
